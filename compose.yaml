@@ -9,6 +9,16 @@ services:
       - ./data:/app/data
     environment:
       - PORT=8440
+      # THRONE stamps a trip with the server's wall clock the moment you tap
+      # START, and stores it as a local-time string carrying no offset. Left at
+      # the image default the container runs UTC, so a 10pm trip is written with
+      # tomorrow's date and the wrong hour - and with no offset in the stamp,
+      # nothing downstream can tell. `dayKey` groups the history on that date and
+      # `byHour` buckets on that hour, so the damage is in the file, not the
+      # display. Compose refuses to start rather than defaulting, because a
+      # silent fallback to UTC is exactly the kind of guess this app refuses to
+      # make everywhere else.
+      - TZ=${TZ:?TZ is required, e.g. TZ=America/New_York - without it the container runs UTC and stamps trips with the wrong date}
     healthcheck:
       # No curl in the alpine image, so health is checked with node's own fetch.
       test: ["CMD", "node", "-e", "fetch('http://localhost:8440/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]

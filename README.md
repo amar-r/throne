@@ -26,12 +26,18 @@ that is what it is designed for.
 With Docker:
 
 ```bash
-mkdir -p data          # so the bind mount isn't created root-owned
+mkdir -p data                        # so the bind mount isn't created root-owned
+echo "TZ=$(cat /etc/timezone)" > .env   # or set it by hand, e.g. TZ=America/New_York
 docker compose up -d
 ```
 
 `compose.yaml` pulls the published image; `docker-compose.yml` builds from this
 checkout.
+
+`TZ` is required and compose will refuse to start without it. A trip is stamped
+with the container's wall clock and stored without an offset, so a container
+left on UTC records a 10pm trip as 2am the next day — wrong hour, wrong day, and
+undetectable after the fact. Failing to start is the lesser problem.
 
 ## Using it
 
@@ -65,6 +71,7 @@ recorded as a no. It stays unanswered and stays out of the statistics.
 | Variable | Default | Meaning |
 |---|---|---|
 | `PORT` | `8440` | Port to listen on |
+| `TZ` | *(required in Docker)* | Timezone the trip stamps are written in. Unset means UTC, which silently misdates every evening trip |
 | `DATA_DIR` | `./data` | Where `entries.json` lives |
 | `MAX_ENTRIES` | `50000` | Ceiling on stored trips, so a stuck client can't fill the disk |
 
