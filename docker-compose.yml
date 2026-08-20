@@ -1,0 +1,20 @@
+# Builds from this checkout rather than pulling the published image — this is
+# the one to use when working on THRONE itself. compose.yaml is the one to use
+# when just running it.
+services:
+  throne:
+    build: .
+    container_name: throne-dev
+    restart: unless-stopped
+    ports:
+      - "8440:8440"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - PORT=8440
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8440/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

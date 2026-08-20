@@ -1,0 +1,1060 @@
+<!-- THRONE — the entire frontend. One file, no build step, no framework.
+     public/ is served straight off disk, so editing this and reloading is the
+     whole dev loop. -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>THRONE</title>
+<script>
+  // Applied before first paint, and deliberately blocking: reading the stored
+  // theme after the stylesheet has painted gives a flash of the wrong palette
+  // on every single load.
+  (function () {
+    try {
+      var t = localStorage.getItem('throne-theme');
+      if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+    } catch (e) { /* private mode; the media query still gets it right */ }
+  })();
+</script>
+<style>
+  /* Light is the bare :root palette. Dark is redefined twice — once for the
+     system preference and once for an explicit choice — so a manual toggle
+     wins in both directions rather than only away from the system setting. */
+  :root {
+    --bg: #f6f4f1;
+    --group: #ffffff;
+    --group-2: #f0ede8;
+    --separator: #e3ded6;
+    --label: #1c1a17;
+    --label-2: #6b645b;
+    --label-3: #9a9289;
+    --tint: #2f6f62;
+    --tint-soft: #dcece8;
+    --on-tint: #ffffff;
+    --waste: #b4541f;
+    --waste-soft: #f7e5d9;
+    --good: #2f6f62;
+    --danger: #b3261e;
+    --radius: 14px;
+    --pad: 16px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #131211;
+      --group: #1e1d1b;
+      --group-2: #272523;
+      --separator: #34312e;
+      --label: #f2efea;
+      --label-2: #a29a90;
+      --label-3: #6f6862;
+      --tint: #5fb3a1;
+      --tint-soft: #1e332e;
+      --on-tint: #10201c;
+      --waste: #e08a5a;
+      --waste-soft: #33241b;
+      --good: #5fb3a1;
+      --danger: #f2685c;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #131211;
+    --group: #1e1d1b;
+    --group-2: #272523;
+    --separator: #34312e;
+    --label: #f2efea;
+    --label-2: #a29a90;
+    --label-3: #6f6862;
+    --tint: #5fb3a1;
+    --tint-soft: #1e332e;
+    --on-tint: #10201c;
+    --waste: #e08a5a;
+    --waste-soft: #33241b;
+    --good: #5fb3a1;
+    --danger: #f2685c;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--label);
+    font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    padding-bottom: calc(72px + env(safe-area-inset-bottom));
+  }
+  .wrap { max-width: 640px; margin: 0 auto; padding: 0 var(--pad); }
+
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: max(12px, env(safe-area-inset-top)) var(--pad) 12px;
+    max-width: 640px; margin: 0 auto;
+  }
+  .brand { font-weight: 700; letter-spacing: .14em; font-size: 13px; color: var(--label-2); }
+  .iconbtn {
+    background: none; border: 0; color: var(--label-2); font-size: 18px;
+    padding: 8px; cursor: pointer; border-radius: 10px;
+  }
+  .iconbtn:hover { background: var(--group-2); }
+
+  .dest { display: none; }
+  .dest.active { display: block; }
+
+  /* Bottom tab bar on phones, segmented control above. The bar is where a
+     thumb already is; the segmented control is where a cursor already is. */
+  #tabbar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+    display: flex; background: var(--group);
+    border-top: 1px solid var(--separator);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  #tabbar button {
+    flex: 1; background: none; border: 0; padding: 10px 4px 12px;
+    color: var(--label-3); font-size: 11px; font-weight: 600; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+  }
+  #tabbar button .ic { font-size: 19px; line-height: 1; }
+  #tabbar button.active { color: var(--tint); }
+  #segbar { display: none; }
+  @media (min-width: 641px) {
+    #tabbar { display: none; }
+    body { padding-bottom: 40px; }
+    #segbar {
+      display: flex; gap: 4px; background: var(--group-2); padding: 4px;
+      border-radius: 11px; max-width: 640px; margin: 0 auto 20px;
+    }
+    #segbar button {
+      flex: 1; border: 0; background: none; padding: 7px; border-radius: 8px;
+      font-size: 14px; font-weight: 600; color: var(--label-2); cursor: pointer;
+    }
+    #segbar button.active { background: var(--group); color: var(--label); box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+  }
+
+  .card {
+    background: var(--group); border-radius: var(--radius);
+    padding: var(--pad); margin-bottom: 14px;
+  }
+  .card-title { font-size: 12px; font-weight: 700; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--label-3); margin: 0 0 10px; }
+
+  /* The START button is the entire point of the Now screen, so it gets the
+     screen. It has to be hittable one-handed without looking. */
+  .bigbtn {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    width: 100%; min-height: 34vh; border: 0; border-radius: 20px;
+    background: var(--tint); color: var(--on-tint);
+    font-size: 30px; font-weight: 700; letter-spacing: .1em;
+    cursor: pointer; -webkit-tap-highlight-color: transparent;
+  }
+  .bigbtn:active { transform: scale(.985); }
+  .bigbtn .sub { font-size: 13px; font-weight: 500; letter-spacing: 0; opacity: .8; margin-top: 8px; }
+  .bigbtn.done { background: var(--waste); }
+
+  .clock {
+    font: 600 clamp(48px, 17vw, 68px)/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-variant-numeric: tabular-nums;
+    text-align: center; margin: 6px 0 4px; color: var(--label);
+  }
+  .clock-sub { text-align: center; color: var(--label-2); font-size: 14px; margin-bottom: 18px; }
+
+  .btn {
+    display: block; width: 100%; padding: 15px; border: 0; border-radius: 13px;
+    background: var(--tint); color: var(--on-tint);
+    font-size: 17px; font-weight: 650; cursor: pointer;
+  }
+  .btn.secondary { background: var(--group-2); color: var(--label); }
+  .btn:disabled { opacity: .5; cursor: default; }
+  .linkbtn {
+    background: none; border: 0; color: var(--tint); font-size: 15px;
+    padding: 10px; cursor: pointer; width: 100%; font-weight: 550;
+  }
+  .linkbtn.danger { color: var(--danger); }
+
+  .pill {
+    display: inline-block; padding: 2px 9px; border-radius: 999px;
+    font-size: 12px; font-weight: 650;
+    background: var(--group-2); color: var(--label-2);
+  }
+  .pill.open { background: var(--tint-soft); color: var(--tint); }
+  .pill.no { background: var(--waste-soft); color: var(--waste); }
+  .pill.yes { background: var(--tint-soft); color: var(--good); }
+
+  /* History */
+  .daygroup { margin-bottom: 6px; }
+  .dayhead {
+    font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+    color: var(--label-3); padding: 14px 4px 6px;
+    display: flex; justify-content: space-between; align-items: baseline;
+  }
+  .trip {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    background: var(--group); border: 0; border-bottom: 1px solid var(--separator);
+    padding: 13px var(--pad); text-align: left; cursor: pointer; color: var(--label);
+    font: inherit;
+  }
+  .trip:first-of-type { border-top-left-radius: var(--radius); border-top-right-radius: var(--radius); }
+  .trip:last-of-type { border-bottom: 0; border-bottom-left-radius: var(--radius); border-bottom-right-radius: var(--radius); }
+  .trip:hover { background: var(--group-2); }
+  .trip .when { font-variant-numeric: tabular-nums; font-size: 15px; width: 74px; flex: none; color: var(--label-2); }
+  .trip .mid { flex: 1; min-width: 0; }
+  .trip .dur { font-weight: 700; font-size: 16px; font-variant-numeric: tabular-nums; }
+  .trip .tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+  .trip .waste { flex: none; text-align: right; font-size: 12px; color: var(--waste); font-weight: 650; }
+
+  /* Stats */
+  .hero { background: var(--waste-soft); border-radius: var(--radius); padding: 20px var(--pad); margin-bottom: 14px; }
+  .hero .big {
+    font: 700 clamp(30px, 9vw, 40px)/1.1 -apple-system, BlinkMacSystemFont, sans-serif;
+    color: var(--waste); font-variant-numeric: tabular-nums;
+  }
+  .hero .lede { font-size: 15px; color: var(--label-2); margin-top: 8px; }
+  .stats-row { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 14px; }
+  .stat { background: var(--group); border-radius: var(--radius); padding: 14px; }
+  .stat .v { font-size: 23px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .stat .k { font-size: 12px; color: var(--label-2); margin-top: 3px; }
+
+  .ranges { display: flex; gap: 7px; margin-bottom: 14px; flex-wrap: wrap; }
+  .ranges button {
+    border: 0; background: var(--group); color: var(--label-2); padding: 8px 15px;
+    border-radius: 999px; font-size: 14px; font-weight: 600; cursor: pointer;
+  }
+  .ranges button.active { background: var(--tint); color: var(--on-tint); }
+
+  /* Down is good here, so the trend is green when it falls and amber when it
+     rises — the opposite of the usual convention, because the quantity is a
+     cost rather than a score. */
+  .note { font-size: 12px; color: var(--label-3); margin-top: 8px; }
+  .trend { margin-top: 12px; font-size: 14px; font-weight: 650; }
+  .trend.down { color: var(--good); }
+  .trend.up { color: var(--waste); }
+  .trend.flat, .trend.none { color: var(--label-2); font-weight: 550; }
+
+  table.acts { width: 100%; border-collapse: collapse; font-size: 15px; }
+  table.acts th { text-align: left; font-size: 12px; color: var(--label-3); font-weight: 600; padding-bottom: 6px; }
+  table.acts td { padding: 8px 0; border-top: 1px solid var(--separator); }
+  table.acts td.n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  .empty { color: var(--label-3); text-align: center; padding: 34px 16px; font-size: 15px; }
+
+  /* Sheets */
+  dialog {
+    border: 0; padding: 0; background: var(--group); color: var(--label);
+    border-radius: 18px 18px 0 0; width: 100%; max-width: 640px;
+    margin: auto auto 0; max-height: 92vh;
+  }
+  dialog::backdrop { background: rgba(0,0,0,.45); }
+  @media (min-width: 641px) { dialog { border-radius: 18px; margin: auto; } }
+  .sheet-in { padding: var(--pad); padding-bottom: calc(var(--pad) + env(safe-area-inset-bottom)); overflow-y: auto; max-height: 92vh; }
+  .sheet-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .sheet-head h2 { font-size: 19px; margin: 0; }
+  .q { font-size: 15px; font-weight: 650; margin: 20px 0 9px; }
+  .q:first-of-type { margin-top: 14px; }
+
+  .twoup { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .answer-btn {
+    padding: 20px 10px; border: 2px solid var(--separator); background: var(--group);
+    border-radius: 13px; font-size: 17px; font-weight: 650; color: var(--label); cursor: pointer;
+  }
+  .answer-btn[aria-pressed="true"] { border-color: var(--tint); background: var(--tint-soft); color: var(--tint); }
+
+  .seg { display: flex; gap: 5px; flex-wrap: wrap; }
+  .seg button {
+    flex: 1 1 auto; min-width: 68px; padding: 11px 6px; border: 1px solid var(--separator);
+    background: var(--group); border-radius: 10px; font-size: 13px; font-weight: 600;
+    color: var(--label-2); cursor: pointer;
+  }
+  .seg button[aria-pressed="true"] { background: var(--tint); border-color: var(--tint); color: var(--on-tint); }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    padding: 10px 15px; border: 1px solid var(--separator); background: var(--group);
+    border-radius: 999px; font-size: 15px; color: var(--label); cursor: pointer;
+  }
+  .chip[aria-pressed="true"] { background: var(--tint); border-color: var(--tint); color: var(--on-tint); }
+
+  input[type="text"], input[type="datetime-local"], textarea {
+    width: 100%; padding: 12px; border: 1px solid var(--separator); border-radius: 10px;
+    background: var(--bg); color: var(--label); font: inherit; font-size: 16px;
+  }
+  textarea { resize: vertical; min-height: 62px; }
+  label.fld { display: block; font-size: 13px; color: var(--label-2); margin: 14px 0 6px; font-weight: 600; }
+  .err {
+    display: none; background: var(--waste-soft); color: var(--waste);
+    padding: 11px 13px; border-radius: 10px; font-size: 14px; margin-top: 14px;
+  }
+  .hint { font-size: 13px; color: var(--label-3); margin-top: 8px; text-align: center; }
+  .inline-edit { text-align: center; margin-bottom: 16px; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+</style>
+
+<header>
+  <span class="brand">THRONE</span>
+  <button class="iconbtn" id="theme-btn" title="Switch theme" aria-label="Switch theme">◐</button>
+</header>
+
+<div class="wrap">
+  <div id="segbar">
+    <button data-dest="now" class="active">Now</button>
+    <button data-dest="log">Log</button>
+    <button data-dest="stats">Stats</button>
+  </div>
+
+  <!-- ================= NOW ================= -->
+  <section class="dest active" id="dest-now">
+    <div id="now-idle">
+      <button class="bigbtn" id="start-btn">START<span class="sub">tap when you sit down</span></button>
+      <button class="linkbtn" id="backfill-btn">Log a trip I forgot</button>
+    </div>
+
+    <div id="now-running" style="display:none">
+      <div class="card">
+        <div class="clock" id="clock">0:00</div>
+        <div class="clock-sub" id="clock-sub"></div>
+        <button class="btn" id="done-btn" style="background:var(--waste)">DONE</button>
+        <button class="linkbtn danger" id="discard-btn">Discard this trip</button>
+      </div>
+    </div>
+
+    <div id="now-stale" style="display:none">
+      <div class="card">
+        <h3 class="card-title">Still on the toilet?</h3>
+        <p id="stale-text" style="margin:0 0 16px;color:var(--label-2)"></p>
+        <button class="btn" id="stale-finish">Finish now</button>
+        <button class="linkbtn" id="stale-finish-at">Finish at a different time…</button>
+        <button class="linkbtn danger" id="stale-discard">Discard it</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= LOG ================= -->
+  <section class="dest" id="dest-log">
+    <div id="history"></div>
+    <p class="hint" id="log-foot"></p>
+    <p class="hint">
+      <a href="/api/export" style="color:var(--tint)">Export JSON</a> ·
+      <a href="/api/export/csv" style="color:var(--tint)">Export CSV</a>
+    </p>
+  </section>
+
+  <!-- ================= STATS ================= -->
+  <section class="dest" id="dest-stats">
+    <div class="ranges" id="ranges">
+      <button data-days="7">7 days</button>
+      <button data-days="30" class="active">30 days</button>
+      <button data-days="90">90 days</button>
+      <button data-days="0">All time</button>
+    </div>
+    <div id="stats-body"></div>
+  </section>
+</div>
+
+<nav id="tabbar">
+  <button data-dest="now" class="active"><span class="ic">◷</span>Now</button>
+  <button data-dest="log"><span class="ic">☰</span>Log</button>
+  <button data-dest="stats"><span class="ic">◔</span>Stats</button>
+</nav>
+
+<!-- Completion sheet -->
+<dialog id="sheet">
+  <form method="dialog" class="sheet-in" id="sheet-form">
+    <div class="sheet-head">
+      <h2>How'd it go?</h2>
+      <button type="button" class="iconbtn" id="sheet-close" aria-label="Close">✕</button>
+    </div>
+    <p style="margin:0;color:var(--label-2);font-size:14px" id="sheet-span"></p>
+
+    <div class="q">Did you actually poop?</div>
+    <div class="twoup">
+      <button type="button" class="answer-btn" id="poop-yes" aria-pressed="false">Yes</button>
+      <button type="button" class="answer-btn" id="poop-no" aria-pressed="false">No</button>
+    </div>
+
+    <div id="prod-block" style="display:none">
+      <div class="q">How much of that time was actually pooping?</div>
+      <div class="seg" id="prod-seg"></div>
+    </div>
+
+    <div class="q">What else were you doing?</div>
+    <div class="chips" id="doing-chips"></div>
+    <input type="text" id="doing-other" placeholder="What else?" style="display:none;margin-top:10px">
+
+    <label class="fld" for="sheet-notes">Notes</label>
+    <textarea id="sheet-notes" placeholder="Optional"></textarea>
+
+    <label class="fld" for="sheet-ended">Ended at</label>
+    <input type="datetime-local" id="sheet-ended" step="1">
+
+    <div class="err" id="sheet-err"></div>
+    <div style="margin-top:18px">
+      <button type="button" class="btn" id="sheet-save">Save trip</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Edit / backfill sheet -->
+<dialog id="edit">
+  <form method="dialog" class="sheet-in" id="edit-form">
+    <div class="sheet-head">
+      <h2 id="edit-title">Edit trip</h2>
+      <button type="button" class="iconbtn" id="edit-close" aria-label="Close">✕</button>
+    </div>
+
+    <label class="fld" for="edit-started">Started at</label>
+    <input type="datetime-local" id="edit-started" step="1">
+
+    <label class="fld" for="edit-ended">Ended at <span style="font-weight:400">— leave blank to keep it running</span></label>
+    <input type="datetime-local" id="edit-ended" step="1">
+
+    <div id="edit-answers">
+      <div class="q">Did you actually poop?</div>
+      <div class="twoup">
+        <button type="button" class="answer-btn" id="edit-poop-yes" aria-pressed="false">Yes</button>
+        <button type="button" class="answer-btn" id="edit-poop-no" aria-pressed="false">No</button>
+      </div>
+
+      <div id="edit-prod-block" style="display:none">
+        <div class="q">How much of that time was actually pooping?</div>
+        <div class="seg" id="edit-prod-seg"></div>
+      </div>
+
+      <div class="q">What else were you doing?</div>
+      <div class="chips" id="edit-doing-chips"></div>
+      <input type="text" id="edit-doing-other" placeholder="What else?" style="display:none;margin-top:10px">
+
+      <label class="fld" for="edit-notes">Notes</label>
+      <textarea id="edit-notes" placeholder="Optional"></textarea>
+    </div>
+
+    <div class="err" id="edit-err"></div>
+    <div style="margin-top:18px">
+      <button type="button" class="btn" id="edit-save">Save</button>
+      <button type="button" class="linkbtn danger" id="edit-delete">Delete this trip</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="metrics.js"></script>
+<script>
+(function () {
+  'use strict';
+  var M = window.ThroneMetrics;
+
+  // ---- state -------------------------------------------------------------
+  // Four globals and a full re-render on change. There is no reactivity here
+  // and there doesn't need to be: the whole dataset is a few hundred short
+  // records and every mutation refetches it anyway.
+  var entries = [];
+  var rangeDays = 30;
+  var editingId = null;
+  var timerHandle = null;
+
+  var activeDest = 'now';
+  var DOING_OPTIONS = ['Phone / scrolling', 'Just sitting there'];
+
+  function el(id) { return document.getElementById(id); }
+
+  function escapeHtml(s) {
+    var d = document.createElement('div');
+    d.textContent = s === null || s === undefined ? '' : String(s);
+    return d.innerHTML;
+  }
+
+  // Formats a Date as the local "YYYY-MM-DDTHH:mm:ss" a datetime-local input
+  // expects. Not toISOString(), which converts to UTC and shifts the clock by
+  // the timezone offset — the trip would appear to have happened hours off.
+  function localDatetimeValue(d) {
+    return M.toLocalString(d);
+  }
+
+  function timeLabel(d) {
+    return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  }
+
+  // ---- navigation --------------------------------------------------------
+  function showDest(dest) {
+    activeDest = dest;
+    var bs = document.querySelectorAll('#tabbar button, #segbar button');
+    for (var i = 0; i < bs.length; i++) {
+      var on = bs[i].dataset.dest === dest;
+      bs[i].classList.toggle('active', on);
+      if (on) bs[i].setAttribute('aria-current', 'page');
+      else bs[i].removeAttribute('aria-current');
+    }
+    var ds = document.querySelectorAll('.dest');
+    for (var j = 0; j < ds.length; j++) {
+      ds[j].classList.toggle('active', ds[j].id === 'dest-' + dest);
+    }
+    window.scrollTo(0, 0);
+  }
+  document.addEventListener('click', function (ev) {
+    var b = ev.target.closest('#tabbar button, #segbar button');
+    if (b) showDest(b.dataset.dest);
+  });
+
+  el('theme-btn').addEventListener('click', function () {
+    var root = document.documentElement;
+    var isDark = root.dataset.theme
+      ? root.dataset.theme === 'dark'
+      : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    root.dataset.theme = isDark ? 'light' : 'dark';
+    try { localStorage.setItem('throne-theme', root.dataset.theme); } catch (e) {}
+  });
+
+  // ---- data --------------------------------------------------------------
+  function openEntry() { return M.openEntry(entries); }
+
+  async function load() {
+    try {
+      var res = await fetch('/api/entries');
+      var data = await res.json();
+      entries = Array.isArray(data) ? data : [];
+    } catch (e) {
+      console.error('Failed to load trips', e);
+      entries = [];
+    }
+    render();
+  }
+
+  async function api(url, method, body) {
+    var opts = { method: method };
+    if (body !== undefined) {
+      opts.headers = { 'Content-Type': 'application/json' };
+      opts.body = JSON.stringify(body);
+    }
+    var res = await fetch(url, opts);
+    if (res.status === 204) return null;
+    var payload = await res.json().catch(function () { return {}; });
+    if (!res.ok) throw new Error(payload.error || ('Server returned ' + res.status));
+    return payload;
+  }
+
+  // ---- the running clock -------------------------------------------------
+  // Recompute from the stored start on every tick. Never increment a counter:
+  // setInterval is throttled to about once a minute in a backgrounded tab and
+  // stops outright while the phone is locked, so an accumulated count would
+  // silently under-report exactly the long trips this app exists to measure.
+  // Recomputing means a throttled tick is merely stale for a moment, never
+  // wrong.
+  function tick() {
+    var e = openEntry();
+    if (!e) { stopTimer(); return; }
+    var secs = M.elapsedSeconds(e, Date.now());
+    el('clock').textContent = M.formatClock(secs);
+    document.title = M.formatClock(secs) + ' · THRONE';
+    // A trip that crosses the stale threshold while the page is open should
+    // stop showing a live clock without waiting for a reload.
+    if (M.isStale(e, Date.now())) renderNow();
+  }
+
+  function startTimer() {
+    if (timerHandle) return;
+    timerHandle = setInterval(tick, 1000);
+  }
+  function stopTimer() {
+    if (timerHandle) { clearInterval(timerHandle); timerHandle = null; }
+    document.title = 'THRONE';
+  }
+
+  // Waking from a locked phone or restoring from the bfcache: tick first so the
+  // clock is right immediately, then refetch. The refetch matters as much as
+  // the tick — the trip may have been finished on the laptop, and a phone
+  // showing a clock still counting a trip that ended an hour ago is the worst
+  // thing this screen can do.
+  function wake() {
+    if (document.visibilityState !== 'visible') return;
+    tick();
+    load();
+  }
+  document.addEventListener('visibilitychange', wake);
+  window.addEventListener('pageshow', wake);
+  window.addEventListener('focus', wake);
+
+  // ---- Now screen --------------------------------------------------------
+  function renderNow() {
+    var e = openEntry();
+    var stale = e && M.isStale(e, Date.now());
+
+    el('now-idle').style.display = e ? 'none' : '';
+    el('now-running').style.display = e && !stale ? '' : 'none';
+    el('now-stale').style.display = stale ? '' : 'none';
+
+    if (!e) { stopTimer(); return; }
+
+    var s = M.start(e);
+    if (stale) {
+      stopTimer();
+      el('stale-text').textContent =
+        'This trip started ' + M.formatDuration(M.elapsedSeconds(e, Date.now())) +
+        ' ago, at ' + timeLabel(s) + '. That is almost certainly one you forgot to ' +
+        'finish rather than one still going, so the clock has stopped. Nothing is ' +
+        'saved until you pick one of these.';
+      return;
+    }
+
+    var sub = el('clock-sub');
+    sub.innerHTML = 'Started ' + escapeHtml(timeLabel(s)) +
+      ' · <button type="button" class="linkbtn" style="display:inline;width:auto;padding:0;font-size:14px" data-action="edit-open">Edit</button>';
+    tick();
+    startTimer();
+  }
+
+  el('start-btn').addEventListener('click', async function () {
+    el('start-btn').disabled = true;
+    try {
+      await api('/api/entries', 'POST', {});
+    } catch (err) {
+      // A 409 means another device already started one. Refetching picks it up
+      // rather than trusting this page's stale idea of the world.
+      console.error(err);
+    }
+    el('start-btn').disabled = false;
+    await load();
+  });
+
+  el('clock-sub').addEventListener('click', function (ev) {
+    var e = openEntry();
+    if (e && ev.target.closest('[data-action="edit-open"]')) openEdit(e.id);
+  });
+
+  el('done-btn').addEventListener('click', function () { openSheet(openEntry()); });
+  el('stale-finish').addEventListener('click', function () { openSheet(openEntry()); });
+  el('stale-finish-at').addEventListener('click', function () {
+    var e = openEntry();
+    openSheet(e);
+    // Prefill something plausible rather than "now", which is the one answer
+    // that is certainly wrong for a trip that ended hours ago.
+    var guess = new Date(M.start(e).getTime() + 15 * 60000);
+    el('sheet-ended').value = localDatetimeValue(guess);
+  });
+
+  async function discardOpen() {
+    var e = openEntry();
+    if (!e) return;
+    if (!window.confirm('Throw this trip away? It will not be logged at all.')) return;
+    try { await api('/api/entries/' + encodeURIComponent(e.id), 'DELETE'); }
+    catch (err) { window.alert(err.message); }
+    await load();
+  }
+  el('discard-btn').addEventListener('click', discardOpen);
+  el('stale-discard').addEventListener('click', discardOpen);
+
+  // ---- completion sheet --------------------------------------------------
+  var sheetPooped = null;
+  var sheetProd = '';
+  var sheetDoing = [];
+
+  function buildSeg(host, selected, onPick) {
+    host.innerHTML = M.FRACTION_ORDER.map(function (k) {
+      return '<button type="button" data-val="' + k + '" aria-pressed="' +
+        (selected === k) + '">' + escapeHtml(M.FRACTION_LABELS[k]) + '</button>';
+    }).join('');
+    host.onclick = function (ev) {
+      var b = ev.target.closest('button[data-val]');
+      if (b) onPick(b.dataset.val);
+    };
+  }
+
+  function buildChips(host, selected, onToggle) {
+    var known = DOING_OPTIONS.map(function (o) {
+      return '<button type="button" class="chip" data-val="' + escapeHtml(o) + '" aria-pressed="' +
+        (selected.indexOf(o) !== -1) + '">' + escapeHtml(o) + '</button>';
+    });
+    // Anything typed into "Other" on a previous edit shows as its own chip so
+    // it can be turned off again.
+    selected.forEach(function (v) {
+      if (DOING_OPTIONS.indexOf(v) === -1) {
+        known.push('<button type="button" class="chip" data-val="' + escapeHtml(v) +
+          '" aria-pressed="true">' + escapeHtml(v) + '</button>');
+      }
+    });
+    known.push('<button type="button" class="chip" data-other="1">Other…</button>');
+    host.innerHTML = known.join('');
+    host.onclick = function (ev) {
+      var b = ev.target.closest('button');
+      if (!b) return;
+      if (b.dataset.other) { onToggle(null); return; }
+      onToggle(b.dataset.val);
+    };
+  }
+
+  function renderSheet() {
+    el('poop-yes').setAttribute('aria-pressed', String(sheetPooped === true));
+    el('poop-no').setAttribute('aria-pressed', String(sheetPooped === false));
+    // The follow-up only makes sense if something happened. Asking "how much of
+    // it was pooping?" after a No is a question with no true answer.
+    el('prod-block').style.display = sheetPooped === true ? '' : 'none';
+    buildSeg(el('prod-seg'), sheetProd, function (v) { sheetProd = v; renderSheet(); });
+    buildChips(el('doing-chips'), sheetDoing, function (v) {
+      if (v === null) {
+        var o = el('doing-other');
+        o.style.display = '';
+        o.focus();
+        return;
+      }
+      var i = sheetDoing.indexOf(v);
+      if (i === -1) sheetDoing.push(v); else sheetDoing.splice(i, 1);
+      renderSheet();
+    });
+  }
+
+  function openSheet(e) {
+    if (!e) return;
+    sheetPooped = null;
+    sheetProd = '';
+    sheetDoing = [];
+    el('sheet-notes').value = '';
+    el('doing-other').value = '';
+    el('doing-other').style.display = 'none';
+    el('sheet-err').style.display = 'none';
+    el('sheet-ended').value = localDatetimeValue(new Date());
+    el('sheet-span').textContent = 'Started ' + timeLabel(M.start(e)) + '.';
+    el('sheet').dataset.id = e.id;
+    renderSheet();
+    el('sheet').showModal();
+  }
+
+  // Dismissing the sheet cannot lose anything: nothing has been written, and
+  // the trip is still open and still running. Do NOT be tempted to save on
+  // dismiss — that would invent an unanswered `pooped`, which is precisely the
+  // fabricated data the whole app is built to avoid.
+  function closeSheet() { el('sheet').close(); }
+  el('sheet-close').addEventListener('click', closeSheet);
+  el('sheet').addEventListener('cancel', function (ev) { ev.preventDefault(); closeSheet(); });
+
+  el('poop-yes').addEventListener('click', function () { sheetPooped = true; renderSheet(); });
+  el('poop-no').addEventListener('click', function () { sheetPooped = false; renderSheet(); });
+
+  el('sheet-save').addEventListener('click', async function () {
+    var err = el('sheet-err');
+    err.style.display = 'none';
+    if (sheetPooped === null) {
+      err.textContent = 'Did you actually poop? Pick one.';
+      err.style.display = 'block';
+      return;
+    }
+    if (sheetPooped === true && !sheetProd) {
+      err.textContent = 'How much of the time was actually pooping?';
+      err.style.display = 'block';
+      return;
+    }
+    var doing = sheetDoing.slice();
+    var other = el('doing-other').value.trim();
+    if (other && doing.indexOf(other) === -1) doing.push(other);
+
+    var btn = el('sheet-save');
+    btn.disabled = true;
+    try {
+      await api('/api/entries/' + encodeURIComponent(el('sheet').dataset.id) + '/complete', 'POST', {
+        endedAt: el('sheet-ended').value,
+        pooped: sheetPooped,
+        productivity: sheetPooped === true ? sheetProd : '',
+        doing: doing,
+        notes: el('sheet-notes').value
+      });
+    } catch (e) {
+      err.textContent = e.message;
+      err.style.display = 'block';
+      btn.disabled = false;
+      return;
+    }
+    btn.disabled = false;
+    closeSheet();
+    await load();
+    showDest('log');
+  });
+
+  // ---- edit / backfill sheet --------------------------------------------
+  var editPooped = null;
+  var editProd = '';
+  var editDoing = [];
+
+  function renderEditSheet() {
+    var finished = !!el('edit-ended').value;
+    // The answers only apply to a trip that has ended. A trip still running
+    // hasn't been asked the questions yet.
+    el('edit-answers').style.display = finished ? '' : 'none';
+    el('edit-poop-yes').setAttribute('aria-pressed', String(editPooped === true));
+    el('edit-poop-no').setAttribute('aria-pressed', String(editPooped === false));
+    el('edit-prod-block').style.display = editPooped === true ? '' : 'none';
+    buildSeg(el('edit-prod-seg'), editProd, function (v) { editProd = v; renderEditSheet(); });
+    buildChips(el('edit-doing-chips'), editDoing, function (v) {
+      if (v === null) {
+        var o = el('edit-doing-other');
+        o.style.display = '';
+        o.focus();
+        return;
+      }
+      var i = editDoing.indexOf(v);
+      if (i === -1) editDoing.push(v); else editDoing.splice(i, 1);
+      renderEditSheet();
+    });
+  }
+
+  function openEdit(id) {
+    editingId = id || null;
+    var e = id ? entries.find(function (x) { return String(x.id) === String(id); }) : null;
+
+    el('edit-title').textContent = e ? 'Edit trip' : 'Log a trip you forgot';
+    el('edit-err').style.display = 'none';
+    el('edit-delete').style.display = e ? '' : 'none';
+
+    if (e) {
+      el('edit-started').value = e.startedAt || '';
+      el('edit-ended').value = e.endedAt || '';
+      editPooped = e.pooped === true || e.pooped === false ? e.pooped : null;
+      editProd = e.productivity || '';
+      editDoing = Array.isArray(e.doing) ? e.doing.slice() : [];
+      el('edit-notes').value = e.notes || '';
+    } else {
+      // A forgotten trip is being reconstructed, so default to something that
+      // needs adjusting rather than something that looks already correct.
+      var now = new Date();
+      el('edit-started').value = localDatetimeValue(new Date(now.getTime() - 20 * 60000));
+      el('edit-ended').value = localDatetimeValue(now);
+      editPooped = null;
+      editProd = '';
+      editDoing = [];
+      el('edit-notes').value = '';
+    }
+    el('edit-doing-other').value = '';
+    el('edit-doing-other').style.display = 'none';
+    renderEditSheet();
+    el('edit').showModal();
+  }
+
+  el('edit-close').addEventListener('click', function () { el('edit').close(); });
+  el('edit').addEventListener('cancel', function (ev) { ev.preventDefault(); el('edit').close(); });
+  el('edit-ended').addEventListener('input', renderEditSheet);
+  el('edit-poop-yes').addEventListener('click', function () { editPooped = true; renderEditSheet(); });
+  el('edit-poop-no').addEventListener('click', function () { editPooped = false; renderEditSheet(); });
+  el('backfill-btn').addEventListener('click', function () { openEdit(null); });
+
+  el('edit-save').addEventListener('click', async function () {
+    var err = el('edit-err');
+    err.style.display = 'none';
+    var finished = !!el('edit-ended').value;
+    if (finished && editPooped === null) {
+      err.textContent = 'Did you actually poop? Pick one.';
+      err.style.display = 'block';
+      return;
+    }
+    var doing = editDoing.slice();
+    var other = el('edit-doing-other').value.trim();
+    if (other && doing.indexOf(other) === -1) doing.push(other);
+
+    var body = {
+      startedAt: el('edit-started').value,
+      endedAt: el('edit-ended').value,
+      pooped: finished ? editPooped : null,
+      productivity: finished && editPooped === true ? editProd : '',
+      doing: finished ? doing : [],
+      notes: el('edit-notes').value
+    };
+
+    var btn = el('edit-save');
+    btn.disabled = true;
+    try {
+      if (editingId) await api('/api/entries/' + encodeURIComponent(editingId), 'PUT', body);
+      else await api('/api/entries', 'POST', body);
+    } catch (e) {
+      err.textContent = e.message;
+      err.style.display = 'block';
+      btn.disabled = false;
+      return;
+    }
+    btn.disabled = false;
+    el('edit').close();
+    await load();
+  });
+
+  el('edit-delete').addEventListener('click', async function () {
+    if (!editingId) return;
+    if (!window.confirm('Delete this trip for good?')) return;
+    try { await api('/api/entries/' + encodeURIComponent(editingId), 'DELETE'); }
+    catch (e) { window.alert(e.message); }
+    el('edit').close();
+    await load();
+  });
+
+  // ---- history -----------------------------------------------------------
+  function dayLabel(key) {
+    var d = M.parseLocal(key + 'T00:00:00');
+    if (!d) return key;
+    var today = new Date(); today.setHours(0, 0, 0, 0);
+    var age = Math.round((today - d) / 86400000);
+    if (age === 0) return 'Today';
+    if (age === 1) return 'Yesterday';
+    return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  }
+
+  function renderHistory() {
+    var host = el('history');
+    if (!entries.length) {
+      host.innerHTML = '<div class="empty">No trips logged yet. Tap START on the Now screen when you next sit down.</div>';
+      el('log-foot').textContent = '';
+      return;
+    }
+
+    var groups = new Map();
+    entries.forEach(function (e) {
+      var k = M.dayKey(e);
+      if (!groups.has(k)) groups.set(k, []);
+      groups.get(k).push(e);
+    });
+
+    var html = '';
+    groups.forEach(function (list, key) {
+      var dayWaste = list.reduce(function (a, e) { return a + (M.wastedSeconds(e) || 0); }, 0);
+      html += '<div class="daygroup"><div class="dayhead"><span>' + escapeHtml(dayLabel(key)) +
+        '</span><span>' + escapeHtml(M.formatDuration(dayWaste)) + ' wasted</span></div>';
+      html += list.map(function (e) {
+        var s = M.start(e);
+        var open = M.isOpen(e);
+        var tags = [];
+        if (open) tags.push('<span class="pill open">running</span>');
+        else if (e.pooped === true) {
+          tags.push('<span class="pill yes">pooped</span>');
+          if (e.productivity) {
+            tags.push('<span class="pill">' + escapeHtml(M.FRACTION_LABELS[e.productivity] || e.productivity) + '</span>');
+          }
+        } else if (e.pooped === false) {
+          tags.push('<span class="pill no">false alarm</span>');
+        }
+        (Array.isArray(e.doing) ? e.doing : []).forEach(function (d) {
+          tags.push('<span class="pill">' + escapeHtml(d) + '</span>');
+        });
+
+        var waste = M.wastedSeconds(e);
+        return '<button class="trip" data-action="edit" data-id="' + escapeHtml(e.id) + '">' +
+          '<span class="when">' + escapeHtml(s ? timeLabel(s) : '—') + '</span>' +
+          '<span class="mid"><span class="dur">' + escapeHtml(M.formatDuration(M.durationSeconds(e))) + '</span>' +
+          '<span class="tags">' + tags.join('') + '</span></span>' +
+          '<span class="waste">' + (waste ? escapeHtml(M.formatDuration(waste)) + '<br>wasted' : '') + '</span>' +
+          '</button>';
+      }).join('');
+      html += '</div>';
+    });
+
+    host.innerHTML = html;
+    var n = entries.length;
+    el('log-foot').textContent = n + ' trip' + (n === 1 ? '' : 's') + ' logged';
+  }
+
+  // Delegated, so an id is never interpolated into inline JS.
+  el('history').addEventListener('click', function (ev) {
+    var b = ev.target.closest('[data-action="edit"]');
+    if (b) openEdit(b.dataset.id);
+  });
+
+  // ---- stats -------------------------------------------------------------
+  function inRange(e) {
+    if (!rangeDays) return true;
+    var s = M.start(e);
+    if (!s) return false;
+    var cutoff = new Date();
+    cutoff.setHours(0, 0, 0, 0);
+    cutoff = new Date(cutoff.getTime() - (rangeDays - 1) * 86400000);
+    return s >= cutoff;
+  }
+
+  function renderStats() {
+    var host = el('stats-body');
+    var list = M.completed(entries).filter(inRange);
+    var openCount = entries.filter(M.isOpen).length;
+
+    if (!list.length) {
+      host.innerHTML = '<div class="empty">No finished trips in this range yet.</div>';
+      return;
+    }
+
+    var s = M.summarize(list);
+    var rangeName = rangeDays ? 'the last ' + rangeDays + ' days' : 'all time';
+
+    var html = '';
+    html += '<div class="hero">' +
+      '<div class="big">' + escapeHtml(M.formatDuration(s.wastedTotalSeconds)) + '</div>' +
+      '<div class="lede">wasted on the toilet in ' + escapeHtml(rangeName) + ' — ' +
+      escapeHtml(M.formatPercent(s.wastedShare)) + ' of the ' +
+      escapeHtml(M.formatDuration(s.totalSeconds)) + ' you spent sitting there.</div>' +
+      trendLine() +
+      '</div>';
+
+    html += '<div class="stats-row">' +
+      stat(M.formatPercent(s.successRate), 'actually pooped') +
+      stat(String(s.falseAlarms), 'false alarm' + (s.falseAlarms === 1 ? '' : 's')) +
+      stat(M.formatDuration(s.medianSeconds), 'typical trip') +
+      stat(M.formatDuration(s.longestSeconds), 'longest sitting') +
+      stat(s.tripsPerDay ? s.tripsPerDay.toFixed(1) : '—', 'trips a day') +
+      stat(M.formatDuration(s.wastedPerDay), 'wasted a day') +
+      '</div>';
+
+    html += '<div class="card"><h3 class="card-title">Projected</h3>' +
+      '<p style="margin:0;color:var(--label-2)">At this rate you throw away about <strong style="color:var(--waste)">' +
+      escapeHtml(M.formatDuration(s.wastedPerWeek)) + ' a week</strong>. ' +
+      'That is a projection from ' + s.trips + ' trip' + (s.trips === 1 ? '' : 's') +
+      ' across ' + s.days + ' day' + (s.days === 1 ? '' : 's') + ', not a measured week.</p></div>';
+
+    var acts = M.byActivity(list);
+    if (acts.length) {
+      html += '<div class="card"><h3 class="card-title">What the time went on</h3>' +
+        '<table class="acts"><tr><th>Doing</th><th class="n">Trips</th><th class="n">Wasted</th></tr>' +
+        acts.map(function (a) {
+          return '<tr><td>' + escapeHtml(a.label) + '</td><td class="n">' + a.trips +
+            '</td><td class="n">' + escapeHtml(M.formatDuration(a.wasted)) + '</td></tr>';
+        }).join('') +
+        '</table><div class="note">Each trip counts its full length against every activity ' +
+        'tagged on it, so these add up to more than the total when a trip had two. ' +
+        'It answers "how much toilet time involves my phone", not "which minutes were which".</div></div>';
+    }
+
+    if (openCount) {
+      html += '<p class="hint">' + openCount + ' unfinished trip' + (openCount === 1 ? '' : 's') +
+        ' excluded — a trip only counts once you say how it went.</p>';
+    }
+
+    host.innerHTML = html;
+  }
+
+  // Deliberately computed over every trip rather than the range-filtered list:
+  // the range chips choose what the headline totals cover, but "this week
+  // against last week" is a fixed pair of windows, and clipping it to a 7-day
+  // range would leave nothing to compare against.
+  function trendLine() {
+    var w = M.weekOverWeek(M.completed(entries));
+    if (!w.hasPrevious) {
+      return '<div class="trend none">Not enough history yet to compare weeks.</div>';
+    }
+    if (Math.round(w.delta / 60) === 0) {
+      return '<div class="trend flat">Level with the previous 7 days.</div>';
+    }
+    var down = w.delta < 0;
+    return '<div class="trend ' + (down ? 'down' : 'up') + '">' +
+      (down ? '\u2193 ' : '\u2191 ') + escapeHtml(M.formatDuration(Math.abs(w.delta))) +
+      (down ? ' less' : ' more') + ' than the 7 days before \u2014 last 7 days: ' +
+      escapeHtml(M.formatDuration(w.current)) + '</div>';
+  }
+
+  function stat(value, key) {
+    return '<div class="stat"><div class="v">' + escapeHtml(value) + '</div><div class="k">' +
+      escapeHtml(key) + '</div></div>';
+  }
+
+  el('ranges').addEventListener('click', function (ev) {
+    var b = ev.target.closest('button[data-days]');
+    if (!b) return;
+    rangeDays = Number(b.dataset.days);
+    var bs = el('ranges').querySelectorAll('button');
+    for (var i = 0; i < bs.length; i++) bs[i].classList.toggle('active', bs[i] === b);
+    renderStats();
+  });
+
+  // ---- render ------------------------------------------------------------
+  function render() {
+    renderNow();
+    renderHistory();
+    renderStats();
+  }
+
+  load();
+})();
+</script>

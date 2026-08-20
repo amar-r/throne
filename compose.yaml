@@ -1,0 +1,18 @@
+services:
+  throne:
+    image: mrrthr/throne:latest
+    container_name: throne
+    restart: unless-stopped
+    ports:
+      - "8440:8440"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - PORT=8440
+    healthcheck:
+      # No curl in the alpine image, so health is checked with node's own fetch.
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8440/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

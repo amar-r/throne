@@ -1,0 +1,13 @@
+{
+  "name": "throne",
+  "version": "0.1.0",
+  "description": "Self-hosted single-user toilet-trip tracker",
+  "main": "server.js",
+  "license": "MIT",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}
